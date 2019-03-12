@@ -23,7 +23,7 @@ __global__ void kMeansClusterAssignment(float *d_datapoints, int *d_clust_assn, 
 	float min_dist = INFINITY;
 	int closest_centroid = 0;
 
-	for(int c = 0; c <K;++c)
+	for(int c = 0; c<K;++c)
 	{
 		float dist = distance(d_datapoints[idx],d_centroids[c]);
 
@@ -44,6 +44,9 @@ __global__ void kMeansCentroidUpdate(float *d_datapoints, int *d_clust_assn, flo
 
 	//get idx of thread at grid level
 	const int idx = blockIdx.x*blockDim.x + threadIdx.x;
+
+	//bounds check
+	if (idx >= N) return;
 
 	//get idx of thread at the block level
 	const int s_idx = threadIdx.x;
