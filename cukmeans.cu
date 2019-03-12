@@ -20,7 +20,7 @@ __global__ void kMeansClusterAssignment(float *d_datapoints, int *d_clust_assn, 
 	if (idx >= N) return;
 
 	//find the closest centroid to this datapoint
-	float min_dist = 100000.0;
+	float min_dist = INFINITY;
 	int closest_centroid = 0;
 
 	for(int c = 0; c <K;++c)
