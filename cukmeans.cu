@@ -11,7 +11,7 @@ __device__ float distance(float x1, float x2)
 	return sqrt((x2-x1)*(x2-x1));
 }
 
-__global__ void kMeansKernel(float *d_datapoints, int *d_clust_assn, float *d_centroids, int *d_clust_sizes)
+__global__ void kMeansClusterAssignment(float *d_datapoints, int *d_clust_assn, float *d_centroids)
 {
 	//get idx for this datapoint
 	const int idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -19,16 +19,13 @@ __global__ void kMeansKernel(float *d_datapoints, int *d_clust_assn, float *d_ce
 	//bounds check
 	if (idx >= N) return;
 
-	//create an actual value for this datapoint
-	const float x = d_datapoints[idx];
-
 	//find the closest centroid to this datapoint
 	float min_dist = 100000.0;
 	int closest_centroid = 0;
 
 	for(int c = 0; c <K;++c)
 	{
-		float dist = distance(x,d_centroids[c]);
+		float dist = distance(d_datapoints[idx],d_centroids[c]);
 
 		if(dist < min_dist)
 		{
@@ -39,6 +36,14 @@ __global__ void kMeansKernel(float *d_datapoints, int *d_clust_assn, float *d_ce
 
 	//assign closest cluster id for this datapoint/thread
 	d_clust_assn[idx]=closest_centroid;
+}
+
+
+__global__ void kMeansCentroidUpdate(float *d_datapoints, int *d_clust_assn, float *d_centroids, int *d_clust_sizes)
+{
+
+	//get idx of thread at grid level
+	const int idx = blockIdx.x*blockDim.x + threadIdx.x;
 
 	//get idx of thread at the block level
 	const int s_idx = threadIdx.x;
@@ -49,15 +54,6 @@ __global__ void kMeansKernel(float *d_datapoints, int *d_clust_assn, float *d_ce
 
 	__shared__ int s_clust_assn[TPB];
 	s_clust_assn[s_idx] = d_clust_assn[idx];
-
-	//also reset the global centroids to zero since we are about to recompute them (we only need one thread to do this)
-	if(idx<K) 
-	{
-		d_centroids[idx]=0.0f;
-		d_clust_sizes[idx]=0;
-	}
-
-	__syncthreads();
 
 	//it is the thread with idx 0 (in each block) that sums up all the values within the shared array for the block it is in
 	if(s_idx==0)
@@ -71,7 +67,6 @@ __global__ void kMeansKernel(float *d_datapoints, int *d_clust_assn, float *d_ce
 			int clust_id = s_clust_assn[j];
 			b_clust_datapoint_sums[clust_id]+=s_datapoints[j];
 			b_clust_sizes[clust_id]+=1;
-
 		}
 
 		//Now we add the sums to the global centroids and add the counts to the global counts.
@@ -99,7 +94,7 @@ __global__ void kMeansKernel(float *d_datapoints, int *d_clust_assn, float *d_ce
 	if(idx < K){
 		d_centroids[idx] = d_centroids[idx]/d_clust_sizes[idx]; 
 	}
-	
+
 }
 
 
@@ -148,8 +143,8 @@ int main()
 
 	while(cur_iter < MAX_ITER)
 	{
-		//call k-means kernel
-		kMeansKernel<<<N/TPB,TPB>>>(d_datapoints,d_clust_assn,d_centroids,d_clust_sizes);
+		//call cluster assignment kernel
+		kMeansClusterAssignment<<<(N+TPB-1)/TPB,TPB>>>(d_datapoints,d_clust_assn,d_centroids);
 
 		//copy new centroids back to host 
 		cudaMemcpy(h_centroids,d_centroids,K*sizeof(float),cudaMemcpyDeviceToHost);
@@ -158,14 +153,20 @@ int main()
 			printf("Iteration %d: centroid %d: %f\n",cur_iter,i,h_centroids[i]);
 		}
 
+		//reset centroids and cluster sizes (will be updated in the next kernel)
+		cudaMemset(d_centroids,0.0,K*sizeof(float));
+		cudaMemset(d_clust_sizes,0,K*sizeof(int));
+
+		//call centroid update kernel
+		kMeansCentroidUpdate<<<(N+TPB-1)/TPB,TPB>>>(d_datapoints,d_clust_assn,d_centroids,d_clust_sizes);
+
 		cur_iter+=1;
 	}
-
-
 
 	cudaFree(d_datapoints);
 	cudaFree(d_clust_assn);
 	cudaFree(d_centroids);
+	cudaFree(d_clust_sizes);
 
 	free(h_centroids);
 	free(h_datapoints);
