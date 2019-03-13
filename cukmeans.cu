@@ -61,7 +61,6 @@ __global__ void kMeansCentroidUpdate(float *d_datapoints, int *d_clust_assn, flo
 	//it is the thread with idx 0 (in each block) that sums up all the values within the shared array for the block it is in
 	if(s_idx==0)
 	{
-
 		float b_clust_datapoint_sums[K]={0};
 		int b_clust_sizes[K]={0};
 
@@ -78,19 +77,6 @@ __global__ void kMeansCentroidUpdate(float *d_datapoints, int *d_clust_assn, flo
 			atomicAdd(&d_centroids[z],b_clust_datapoint_sums[z]);
 			atomicAdd(&d_clust_sizes[z],b_clust_sizes[z]);
 		}
-	}
-
-	__syncthreads();
-
-	//sanity check: make sure cluster sizes add up to N
-	if(idx==0){
-
-		int local_sum=0;
-		for(int i =0; i < K;++i){
-			printf("cluster %d: size %d\n",i,d_clust_sizes[i] );
-			local_sum+=d_clust_sizes[i];
-		}
-		printf("cluster size sum: %d\n",local_sum );
 	}
 
 	//currently centroids are just sums, so divide by size to get actual centroids
