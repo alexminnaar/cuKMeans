@@ -58,6 +58,8 @@ __global__ void kMeansCentroidUpdate(float *d_datapoints, int *d_clust_assn, flo
 	__shared__ int s_clust_assn[TPB];
 	s_clust_assn[s_idx] = d_clust_assn[idx];
 
+	__syncthreads();
+
 	//it is the thread with idx 0 (in each block) that sums up all the values within the shared array for the block it is in
 	if(s_idx==0)
 	{
