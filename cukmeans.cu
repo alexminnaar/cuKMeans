@@ -81,6 +81,8 @@ __global__ void kMeansCentroidUpdate(float *d_datapoints, int *d_clust_assn, flo
 		}
 	}
 
+	__syncthreads();
+
 	//currently centroids are just sums, so divide by size to get actual centroids
 	if(idx < K){
 		d_centroids[idx] = d_centroids[idx]/d_clust_sizes[idx]; 
